@@ -51,11 +51,12 @@ OUTPUT_REPO = config.OUTPUT_REPO
 def list_repo_files():
     fs = HfFileSystem(token=HF_TOKEN)
     try:
-        return [f["name"] for f in fs.ls(f"datasets/{OUTPUT_REPO}",
-                                          detail=True, recursive=True)
-                if f["type"] == "file"]
+        files = [f["name"] for f in fs.ls(f"datasets/{OUTPUT_REPO}",
+                                           detail=True, recursive=True)
+                 if f["type"] == "file"]
+        return files, None
     except Exception as e:
-        return [f"Error: {e}"]
+        return [], str(e)
 
 
 def find_latest(files, prefix):
@@ -74,12 +75,37 @@ def load_json(path):
         return {"error": str(e)}
 
 
-files     = list_repo_files()
+files, list_error = list_repo_files()
+
+with st.expander("🔧 Debug: what the dashboard sees on HuggingFace", expanded=bool(list_error)):
+    st.markdown(f"**Repo:** `{OUTPUT_REPO}`  ·  **Token set:** {'yes' if bool(HF_TOKEN) else 'no'}")
+    if list_error:
+        st.error(f"Could not list repo files: {list_error}")
+        st.markdown(
+            "If this is a permissions/auth error and `p2-etf-active-inference-results` "
+            "is a **private** HF dataset, this Streamlit environment needs its own "
+            "`HF_TOKEN` — separate from whatever secret your GitHub Actions workflow "
+            "uses. Setting it for Actions does not set it here."
+        )
+    else:
+        st.write(f"{len(files)} file(s) found:")
+        st.code("\n".join(sorted(files)) if files else "(empty)")
+
 tab1_path = find_latest(files, "active_inference_engine_2")
 tab2_path = find_latest(files, "active_inference_engine_windows_")
 
 if not tab1_path:
-    st.error("No results found. Run trainer.py first.")
+    if list_error:
+        st.error(
+            "Could not reach HuggingFace to look for results (see 🔧 Debug above) "
+            "— this is not the same as 'trainer hasn't run yet'."
+        )
+    else:
+        st.error(
+            "Connected to HuggingFace successfully, but no file matching "
+            "`active_inference_engine_2*.json` was found (see 🔧 Debug above for "
+            "the exact file list). Check the filename trainer.py actually pushed."
+        )
     st.stop()
 
 data1 = load_json(tab1_path)

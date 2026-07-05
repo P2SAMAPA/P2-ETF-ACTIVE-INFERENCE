@@ -49,7 +49,11 @@ OUTPUT_REPO = config.OUTPUT_REPO
 
 @st.cache_data(ttl=3600)
 def list_repo_files():
-    fs = HfFileSystem(token=HF_TOKEN)
+    # Empty string vs None matters here: passing "" makes the underlying HTTP
+    # client try to send an empty "Bearer " header and crash outright. Passing
+    # None correctly falls back to anonymous access, which works fine for a
+    # PUBLIC dataset repo (like this one) with no token at all.
+    fs = HfFileSystem(token=HF_TOKEN or None)
     try:
         files = [f["name"] for f in fs.ls(f"datasets/{OUTPUT_REPO}",
                                            detail=True, recursive=True)
@@ -67,7 +71,7 @@ def find_latest(files, prefix):
 
 @st.cache_data(ttl=3600)
 def load_json(path):
-    fs = HfFileSystem(token=HF_TOKEN)
+    fs = HfFileSystem(token=HF_TOKEN or None)
     try:
         with fs.open(path, "r") as f:
             return json.load(f)
